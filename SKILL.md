@@ -1,98 +1,63 @@
 ---
 name: whoop-journal
 description: >
-  WHOOP API v2から生体データ（Recovery, Sleep, Strain, Workout）を取得し、
-  Obsidian Journalに記録するGo CLIラッパー。1時間間隔でlaunchdが自動更新中。
-  Use when: (1) 「WHOOPデータを見せて」「今日のリカバリーは？」「睡眠データ確認」、
-  (2) 「WHOOPを更新して」「Journalに最新データを書き込んで」、
-  (3) タスク設計時にユーザーの体調・睡眠状態を参照したい（recovery/HRV/sleep debt）、
+  WHOOP生体データ（Recovery, Sleep, Strain, Workout）をGo CLIで取得し、
+  Obsidian Journalに自動記録。1時間間隔launchd稼働中。
+  Use when: (1) 「リカバリーは？」「睡眠データ」「WHOOPデータ」「体調どう？」、
+  (2) タスク設計・タイムボクシング時にユーザーのキャパシティを判断したい、
+  (3) 「Journalを更新して」「WHOOPを書き込んで」、
   (4) 「WHOOPの状態は？」「デーモン動いてる？」（運用監視）、
-  (5) 過去のWHOOPデータをバックフィルしたい（--days N）。
-  Don't use when: WHOOP Developer Dashboardの設定変更、OAuth再認証（手動で auth コマンド実行）。
+  (5) 過去のデータをバックフィル（--days N）。
+  Don't use when: WHOOP Developer Dashboard設定、OAuth再認証。
 ---
 
 # whoop-journal
 
-Go CLI: `~/Develop/whoop-journal/dist/whoop-journal`
+## Quick Data Access
 
-## Quick Reference
-
-```bash
-WJ=~/Develop/whoop-journal/dist/whoop-journal
-
-# Get today's data as JSON (for programmatic use)
-$WJ fetch --json
-
-# Preview today's data (human-readable)
-$WJ fetch
-
-# Write/update today's journal
-$WJ fetch --write --update --prepend
-
-# Specific date
-$WJ fetch --date 2026-03-16 --write --update --prepend
-
-# Backfill last 7 days
-$WJ fetch --days 7 --write --update --prepend
-
-# Check daemon & token status
-$WJ status
-
-# Check daemon is running
-launchctl list | grep whoop
-```
-
-## Using WHOOP Data for Task Design
-
-When planning the user's day or assessing capacity, fetch today's JSON and interpret:
+Run `scripts/whoop-summary.sh` for key=value summary (fast, no context cost):
 
 ```bash
-~/Develop/whoop-journal/dist/whoop-journal fetch --json
+bash ~/.claude/skills/whoop-journal/whoop-journal/scripts/whoop-summary.sh
+# or with date
+bash ~/.claude/skills/whoop-journal/whoop-journal/scripts/whoop-summary.sh --date 2026-03-18
 ```
 
-### Key Metrics for AI Agent Decision-Making
+For full JSON: `cd ~/Develop/whoop-journal && ./dist/whoop-journal fetch --json`
 
-| Metric | Field (JSON path) | Green | Yellow | Red |
-|--------|-------------------|-------|--------|-----|
-| Recovery | `.recovery[0].score.recovery_score` | >=67 | 34-66 | <34 |
-| HRV | `.recovery[0].score.hrv_rmssd_milli` | >user baseline | near baseline | well below |
-| RHR | `.recovery[0].score.resting_heart_rate` | low/stable | elevated | significantly elevated |
-| Sleep Perf | `.sleep[0].score.sleep_performance_percentage` | >=85 | 70-84 | <70 |
-| Sleep Debt | `.sleep[0].score.sleep_needed.need_from_sleep_debt_milli` | <30min | 30-90min | >90min |
-| Day Strain | `.cycles[0].score.strain` | context-dependent | - | - |
+For journal write: `cd ~/Develop/whoop-journal && ./dist/whoop-journal fetch --write --update --prepend`
 
-### Recommendations Based on Recovery
+## Capacity Assessment (for task design)
 
-- **Green (>=67%)**: Full capacity. Schedule demanding tasks, deep work blocks.
-- **Yellow (34-66%)**: Moderate. Mix deep work with lighter tasks. Suggest breaks.
-- **Red (<34%)**: Low capacity. Essential tasks only. Suggest early end to day.
+Use recovery_zone from whoop-summary.sh output to calibrate the day:
 
-Sleep debt `need_from_sleep_debt_milli` >1h: recommend earlier wind-down, lighter afternoon.
+- **green** (>=67%): Full deep work. Schedule demanding tasks.
+- **yellow** (34-66%): Mixed schedule. Alternate deep/light work.
+- **red** (<34%): Essentials only. Suggest early wind-down.
 
-## Output Formats
+`sleep_debt_hours` >1.5: flag it. Recommend lighter afternoon, earlier bedtime.
 
-`compact` (default): bullet points. `dashboard`: tables. `detailed`: full report with sleep need.
+`sleep_performance` <70%: sleep quality was poor regardless of hours — expect lower focus.
 
-## Daemon
+## Gotchas
 
-Hourly via launchd (`com.kai.whoop-journal.daily`). Writes today's data with `--write --update --prepend`.
+- **CLI must run from project dir**: Always `cd ~/Develop/whoop-journal` before `./dist/whoop-journal`. The .env is loaded relative to binary location.
+- **Today's data is partial until sleep is scored**: Fetching today before ~8AM JST may return only strain/cycle (no recovery/sleep). Yesterday's data is always complete.
+- **Token auto-refresh is silent**: Access tokens expire every hour. The CLI refreshes automatically on 401. If refresh token itself expires (rare, ~months), user must run `./dist/whoop-journal auth` manually.
+- **API is v2**: v1 endpoints return 404. The CLI uses `api.prod.whoop.com/developer/v2/`.
+- **Duplicate protection**: `--write` without `--update` errors if WHOOP section exists. The daemon always uses `--update`.
+- **JST dates**: All date parameters and journal filenames use JST. The CLI converts to UTC internally for API calls.
+
+## Daemon Status
 
 ```bash
-# Logs
-tail -f ~/Library/Logs/whoop-journal/daily.log
-
-# Manual trigger
-launchctl kickstart -k gui/$UID/com.kai.whoop-journal.daily
-
-# Reinstall
-cd ~/Develop/whoop-journal && bash scripts/install-launchd.sh
+launchctl list | grep whoop    # exit code 0 = last run OK, 1 = last run errored
+tail -5 ~/Library/Logs/whoop-journal/daily.log
+tail -5 ~/Library/Logs/whoop-journal/daily.err.log
 ```
 
-## Troubleshooting
+Reinstall: `cd ~/Develop/whoop-journal && bash scripts/install-launchd.sh`
 
-| Symptom | Fix |
-|---------|-----|
-| `no tokens found` | Run `$WJ auth` (opens browser) |
-| `refresh failed` | Refresh token expired. Run `$WJ auth` |
-| `no_data` for today | WHOOP hasn't scored yet (check after waking) |
-| Daemon not running | `bash ~/Develop/whoop-journal/scripts/install-launchd.sh` |
+## Reference Files
+
+- `references/api-response-schema.md` — Full JSON field paths for all WHOOP data types. Read when parsing `--json` output or writing custom analysis.
