@@ -234,7 +234,8 @@ func FormatDetailed(d *whoop.DayData) string {
 
 // WriteToJournal writes WHOOP data to a journal file.
 // If prepend is true, inserts after the frontmatter header. Otherwise appends.
-func WriteToJournal(journalDir, date, content string, prepend bool) error {
+// If update is true, replaces an existing WHOOP section instead of erroring.
+func WriteToJournal(journalDir, date, content string, prepend, update bool) error {
 	path := FilePath(journalDir, date)
 
 	existing, err := os.ReadFile(path)
@@ -244,13 +245,15 @@ func WriteToJournal(journalDir, date, content string, prepend bool) error {
 
 	text := string(existing)
 
-	// Check duplicate
 	if strings.Contains(text, "## WHOOP Daily") {
-		return fmt.Errorf("WHOOP section already exists in %s", filepath.Base(path))
+		if update {
+			text = removeWhoopSection(text)
+		} else {
+			return fmt.Errorf("WHOOP section already exists in %s (use --update to replace)", filepath.Base(path))
+		}
 	}
 
 	if len(existing) == 0 {
-		// Create new journal file
 		now := time.Now().In(jst)
 		dateUnder := strings.ReplaceAll(date, "-", "_")
 		header := fmt.Sprintf("---\ntitle: \"%s\"\ntype: journal\ndate: %s\ncreated: %s\ntags: [journal]\n---\n# %s\n",
@@ -259,7 +262,6 @@ func WriteToJournal(journalDir, date, content string, prepend bool) error {
 	}
 
 	if prepend {
-		// Insert after "# YYYY_MM_DD" header line
 		headerEnd := findHeaderEnd(text)
 		text = text[:headerEnd] + "\n" + content + "\n" + text[headerEnd:]
 	} else {
@@ -267,6 +269,49 @@ func WriteToJournal(journalDir, date, content string, prepend bool) error {
 	}
 
 	return os.WriteFile(path, []byte(text), 0644)
+}
+
+// removeWhoopSection removes an existing ## WHOOP Daily section from text.
+// It finds the section start and removes everything until the next ## heading or EOF.
+func removeWhoopSection(text string) string {
+	lines := strings.Split(text, "\n")
+	var out []string
+	inWhoop := false
+	// Track trailing blank lines before WHOOP section
+	trailingBlanks := 0
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "## WHOOP Daily") {
+			inWhoop = true
+			// Remove trailing blank lines that preceded this section
+			for trailingBlanks > 0 && len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+				out = out[:len(out)-1]
+				trailingBlanks--
+			}
+			continue
+		}
+
+		if inWhoop {
+			// End of WHOOP section: next ## heading or non-WHOOP content after blank lines
+			if strings.HasPrefix(trimmed, "## ") {
+				inWhoop = false
+				out = append(out, line)
+			}
+			// Skip all lines within the WHOOP section
+			continue
+		}
+
+		if trimmed == "" {
+			trailingBlanks++
+		} else {
+			trailingBlanks = 0
+		}
+		out = append(out, line)
+	}
+
+	return strings.Join(out, "\n")
 }
 
 func findHeaderEnd(text string) int {

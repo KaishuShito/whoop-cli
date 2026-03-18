@@ -70,10 +70,11 @@ Commands:
   status                  Show token status and config
 
 Fetch flags:
-  --date YYYY-MM-DD       Date to fetch (default: yesterday)
+  --date YYYY-MM-DD       Date to fetch (default: today)
   --days N                Number of days to fetch (default: 1)
   --format FORMAT         Output format: compact, dashboard, detailed (default: compact)
   --write                 Write to journal file (default: preview only)
+  --update                Replace existing WHOOP section with fresh data
   --prepend               Insert at top of journal (after header) instead of append
   --json                  Output raw API data as JSON`)
 }
@@ -105,6 +106,7 @@ func runFetch(projectDir string, args []string) int {
 	daysFlag := fs.Int("days", 1, "Number of days")
 	formatFlag := fs.String("format", "compact", "Format: compact, dashboard, detailed")
 	writeFlag := fs.Bool("write", false, "Write to journal")
+	updateFlag := fs.Bool("update", false, "Replace existing WHOOP section with fresh data")
 	prependFlag := fs.Bool("prepend", false, "Insert at top of journal (after header)")
 	jsonFlag := fs.Bool("json", false, "Output raw JSON")
 	fs.Parse(args)
@@ -135,7 +137,7 @@ func runFetch(projectDir string, args []string) int {
 			return 1
 		}
 	} else {
-		endDate = time.Now().In(jst).Add(-24 * time.Hour)
+		endDate = time.Now().In(jst)
 	}
 
 	dates := make([]string, *daysFlag)
@@ -193,7 +195,7 @@ func runFetch(projectDir string, args []string) int {
 		output := formatFn(data)
 
 		if *writeFlag {
-			if err := journal.WriteToJournal(cfg.JournalDir, date, output, *prependFlag); err != nil {
+			if err := journal.WriteToJournal(cfg.JournalDir, date, output, *prependFlag, *updateFlag); err != nil {
 				fmt.Fprintf(os.Stderr, "date=%s status=error error=%v\n", date, err)
 				exitCode = 1
 				continue

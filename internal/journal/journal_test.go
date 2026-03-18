@@ -236,7 +236,7 @@ func TestFindHeaderEnd(t *testing.T) {
 
 func TestWriteToJournal_NewFile(t *testing.T) {
 	dir := t.TempDir()
-	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\ntest\n", false)
+	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\ntest\n", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,14 +252,13 @@ func TestWriteToJournal_Append(t *testing.T) {
 	existing := "---\ntitle: \"2026_03_20\"\n---\n# 2026_03_20\n\n## ログ\nSome content\n"
 	os.WriteFile(filepath.Join(dir, "2026-03-20.md"), []byte(existing), 0644)
 
-	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\ntest\n", false)
+	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\ntest\n", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	content, _ := os.ReadFile(filepath.Join(dir, "2026-03-20.md"))
 	text := string(content)
-	// WHOOP should be AFTER existing content
 	whoopIdx := strings.Index(text, "## WHOOP Daily")
 	logIdx := strings.Index(text, "## ログ")
 	if whoopIdx <= logIdx {
@@ -272,14 +271,13 @@ func TestWriteToJournal_Prepend(t *testing.T) {
 	existing := "---\ntitle: \"2026_03_20\"\n---\n# 2026_03_20\n\n## ログ\nSome content\n"
 	os.WriteFile(filepath.Join(dir, "2026-03-20.md"), []byte(existing), 0644)
 
-	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\ntest\n", true)
+	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\ntest\n", true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	content, _ := os.ReadFile(filepath.Join(dir, "2026-03-20.md"))
 	text := string(content)
-	// WHOOP should be BEFORE existing log content
 	whoopIdx := strings.Index(text, "## WHOOP Daily")
 	logIdx := strings.Index(text, "## ログ")
 	if whoopIdx >= logIdx {
@@ -292,11 +290,66 @@ func TestWriteToJournal_DuplicateProtection(t *testing.T) {
 	existing := "---\ntitle: \"2026_03_20\"\n---\n# 2026_03_20\n\n## WHOOP Daily - 2026-03-20\nalready here\n"
 	os.WriteFile(filepath.Join(dir, "2026-03-20.md"), []byte(existing), 0644)
 
-	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\nnew\n", false)
+	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\nnew\n", false, false)
 	if err == nil {
 		t.Error("expected error for duplicate WHOOP section")
 	}
 	mustContain(t, err.Error(), "already exists")
+}
+
+func TestWriteToJournal_Update(t *testing.T) {
+	dir := t.TempDir()
+	existing := "---\ntitle: \"2026_03_20\"\n---\n# 2026_03_20\n\n## WHOOP Daily - 2026-03-20\n\n**Recovery**: old data\n- old line\n\n## ログ\nSome content\n"
+	os.WriteFile(filepath.Join(dir, "2026-03-20.md"), []byte(existing), 0644)
+
+	err := WriteToJournal(dir, "2026-03-20", "## WHOOP Daily - 2026-03-20\n\n**Recovery**: NEW data\n", true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content, _ := os.ReadFile(filepath.Join(dir, "2026-03-20.md"))
+	text := string(content)
+	mustContain(t, text, "NEW data")
+	mustNotContain(t, text, "old data")
+	mustContain(t, text, "## ログ")
+	// WHOOP should still be before ログ
+	whoopIdx := strings.Index(text, "## WHOOP Daily")
+	logIdx := strings.Index(text, "## ログ")
+	if whoopIdx >= logIdx {
+		t.Errorf("update+prepend: WHOOP (pos %d) should come before ログ (pos %d)", whoopIdx, logIdx)
+	}
+}
+
+func TestRemoveWhoopSection(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		want   string
+	}{
+		{
+			"middle section",
+			"# Title\n\n## WHOOP Daily - 2026-03-20\n\nRecovery data\n- line1\n\n## ログ\ncontent\n",
+			"# Title\n## ログ\ncontent\n",
+		},
+		{
+			"end section",
+			"# Title\n\n## ログ\ncontent\n\n## WHOOP Daily - 2026-03-20\n\nRecovery data\n",
+			"# Title\n\n## ログ\ncontent",
+		},
+		{
+			"no whoop section",
+			"# Title\n\n## ログ\ncontent\n",
+			"# Title\n\n## ログ\ncontent\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := removeWhoopSection(tt.input)
+			if got != tt.want {
+				t.Errorf("removeWhoopSection:\ngot:  %q\nwant: %q", got, tt.want)
+			}
+		})
+	}
 }
 
 // --- DayData.HasData tests ---
