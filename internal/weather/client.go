@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kai/whoop-journal/internal/airquality"
+	"github.com/KaishuShito/whoop-cli/internal/airquality"
 )
 
 const defaultBaseURL = "https://api.open-meteo.com/v1/forecast"

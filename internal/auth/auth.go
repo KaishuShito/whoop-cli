@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kai/whoop-journal/internal/config"
+	"github.com/KaishuShito/whoop-cli/internal/config"
 )
 
 const (

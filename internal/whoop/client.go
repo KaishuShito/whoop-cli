@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kai/whoop-journal/internal/airquality"
-	"github.com/kai/whoop-journal/internal/weather"
+	"github.com/KaishuShito/whoop-cli/internal/airquality"
+	"github.com/KaishuShito/whoop-cli/internal/weather"
 )
 
 const apiBase = "https://api.prod.whoop.com/developer/v2"

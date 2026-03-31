@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kai/whoop-journal/internal/airquality"
+	"github.com/KaishuShito/whoop-cli/internal/airquality"
 )
 
 func TestFetchDay(t *testing.T) {

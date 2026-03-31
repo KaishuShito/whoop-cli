@@ -1,4 +1,6 @@
 .env
 tokens.json
+skill/config.json
 __pycache__/
 dist/
+.playwright-mcp/

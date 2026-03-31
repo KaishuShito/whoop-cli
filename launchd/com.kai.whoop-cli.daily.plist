@@ -3,7 +3,7 @@
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>com.kai.whoop-journal.daily</string>
+    <string>com.kai.whoop-cli.daily</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -21,7 +21,7 @@
     <array>
       <string>/bin/zsh</string>
       <string>-lc</string>
-      <string>cd __PROJECT_DIR__ &amp;&amp; ./dist/whoop-journal fetch --write --update --prepend --format compact &gt;&gt; "$HOME/Library/Logs/whoop-journal/daily.log" 2&gt;&gt; "$HOME/Library/Logs/whoop-journal/daily.err.log"</string>
+      <string>cd __PROJECT_DIR__ &amp;&amp; ./dist/whoop-cli fetch --write --update --prepend --format compact &gt;&gt; "$HOME/Library/Logs/whoop-cli/daily.log" 2&gt;&gt; "$HOME/Library/Logs/whoop-cli/daily.err.log"</string>
     </array>
   </dict>
 </plist>

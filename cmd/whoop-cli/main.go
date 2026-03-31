@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kai/whoop-journal/internal/airquality"
-	"github.com/kai/whoop-journal/internal/auth"
-	"github.com/kai/whoop-journal/internal/config"
-	"github.com/kai/whoop-journal/internal/journal"
-	"github.com/kai/whoop-journal/internal/weather"
-	"github.com/kai/whoop-journal/internal/whoop"
+	"github.com/KaishuShito/whoop-cli/internal/airquality"
+	"github.com/KaishuShito/whoop-cli/internal/auth"
+	"github.com/KaishuShito/whoop-cli/internal/config"
+	"github.com/KaishuShito/whoop-cli/internal/journal"
+	"github.com/KaishuShito/whoop-cli/internal/weather"
+	"github.com/KaishuShito/whoop-cli/internal/whoop"
 )
 
 func main() {
@@ -68,7 +68,7 @@ func run() int {
 }
 
 func printUsage() {
-	fmt.Println(`whoop-journal — WHOOP data → Obsidian Journal
+	fmt.Println(`whoop-cli — WHOOP data → Journal context
 
 Commands:
   auth                    Run OAuth2 flow to get access tokens
@@ -135,7 +135,7 @@ func runFetch(projectDir string, args []string) int {
 
 	tokens, err := auth.LoadTokens(cfg.TokenFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "no tokens found — run 'whoop-journal auth' first\n")
+		fmt.Fprintf(os.Stderr, "no tokens found — run 'whoop-cli auth' first\n")
 		return 1
 	}
 
@@ -377,7 +377,7 @@ func runStatus(projectDir string) int {
 	tokens, err := auth.LoadTokens(cfg.TokenFile)
 	if err != nil {
 		fmt.Println("tokens=none")
-		fmt.Println("hint: run 'whoop-journal auth'")
+		fmt.Println("hint: run 'whoop-cli auth'")
 		return 0
 	}
 

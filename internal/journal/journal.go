@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kai/whoop-journal/internal/weather"
-	"github.com/kai/whoop-journal/internal/whoop"
+	"github.com/KaishuShito/whoop-cli/internal/weather"
+	"github.com/KaishuShito/whoop-cli/internal/whoop"
 )
 
 var jst = time.FixedZone("JST", 9*3600)

@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-LOG_DIR="$HOME/Library/Logs/whoop-journal"
-LABEL="com.kai.whoop-journal.daily"
+LOG_DIR="$HOME/Library/Logs/whoop-cli"
+LABEL="com.kai.whoop-cli.daily"
 TEMPLATE="$PROJECT_DIR/launchd/${LABEL}.plist"
 TARGET="$LAUNCH_AGENTS_DIR/${LABEL}.plist"
 
@@ -20,7 +20,7 @@ chmod 600 "$PROJECT_DIR/.env"
 
 # Check tokens
 if [[ ! -f "$PROJECT_DIR/tokens.json" ]]; then
-  echo "[error] tokens.json not found. Run './dist/whoop-journal auth' first."
+  echo "[error] tokens.json not found. Run './dist/whoop-cli auth' first."
   exit 1
 fi
 
@@ -34,9 +34,9 @@ for key in WHOOP_CLIENT_ID WHOOP_CLIENT_SECRET VAULT_JOURNAL_DIR; do
 done
 
 # Build
-echo "Building whoop-journal..."
-(cd "$PROJECT_DIR" && go build -o ./dist/whoop-journal ./cmd/whoop-journal)
-echo "Built: $PROJECT_DIR/dist/whoop-journal"
+echo "Building whoop-cli..."
+(cd "$PROJECT_DIR" && go build -o ./dist/whoop-cli ./cmd/whoop-cli)
+echo "Built: $PROJECT_DIR/dist/whoop-cli"
 
 # Generate plist from template
 sed "s|__PROJECT_DIR__|$PROJECT_DIR|g" "$TEMPLATE" > "$TARGET"
@@ -47,8 +47,8 @@ launchctl bootout "gui/$UID" "$TARGET" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$UID" "$TARGET"
 
 echo ""
-echo "whoop-journal daemon installed."
-echo "  Schedule: daily at 09:00 + on load"
+echo "whoop-cli daemon installed."
+echo "  Schedule: hourly + on load"
 echo "  Logs: $LOG_DIR/"
 echo ""
 
