@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-WJ="$PROJECT_DIR/dist/whoop-journal"
+WJ="$PROJECT_DIR/dist/whoop-cli"
 CONFIG_FILE="$PROJECT_DIR/skill/config.json"
 ENV_FILE="$PROJECT_DIR/.env"
 TOKENS_FILE="$PROJECT_DIR/tokens.json"

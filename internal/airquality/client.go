@@ -13,25 +13,35 @@ import (
 )
 
 const (
-	defaultBaseURL     = "https://soramame.env.go.jp/soramame/api/data_search"
-	DefaultStationCode = "13103010" // Closest general station to Hiroo in 2026-03-31 station metadata: 港区高輪
+	defaultBaseURL      = "https://air-quality-api.open-meteo.com/v1/air-quality"
+	defaultTimezone     = "auto"
+	ozoneUgM3PerPPM     = 1963.6
+	nitrogenUgM3PerPPM  = 1881.0
+	daytimeStartHour    = 6
+	daytimeEndHour      = 22
+	openMeteoHourlyVars = "pm2_5,pm10,ozone,nitrogen_dioxide"
 )
 
 type Client struct {
-	baseURL     string
-	httpClient  *http.Client
-	stationCode string
+	baseURL    string
+	httpClient *http.Client
+	lat        float64
+	lon        float64
+	timezone   string
 }
 
 type DailyData struct {
-	Date        string
-	StationCode string
-	PM25UgM3    float64
-	OxPpm       float64
-	SO2Ppm      *float64
-	NO2Ppm      *float64
-	PM25Level   Level
-	OxLevel     Level
+	Date      string
+	Latitude  float64
+	Longitude float64
+	PM25UgM3  float64
+	PM10UgM3  float64
+	OzoneUgM3 float64
+	OxPpm     float64
+	NO2UgM3   float64
+	NO2Ppm    float64
+	PM25Level Level
+	OxLevel   Level
 }
 
 type Level struct {
@@ -39,26 +49,25 @@ type Level struct {
 	Emoji string
 }
 
-type apiRecord struct {
-	StationCode string `json:"SKT_CD"`
-	Date        string `json:"SKT_DATE"`
-	Time        string `json:"SKT_TIME"`
-	PM25        string `json:"PM2_5"`
-	Ox          string `json:"OX"`
-	SO2         string `json:"SO2"`
-	NO2         string `json:"NO2"`
+type apiResponse struct {
+	Hourly struct {
+		Time            []string  `json:"time"`
+		PM25            []float64 `json:"pm2_5"`
+		PM10            []float64 `json:"pm10"`
+		Ozone           []float64 `json:"ozone"`
+		NitrogenDioxide []float64 `json:"nitrogen_dioxide"`
+	} `json:"hourly"`
 }
 
-func NewClient(stationCode string) *Client {
-	if stationCode == "" {
-		stationCode = DefaultStationCode
-	}
+func NewClient(lat, lon float64) *Client {
 	return &Client{
 		baseURL: defaultBaseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		stationCode: stationCode,
+		lat:      lat,
+		lon:      lon,
+		timezone: defaultTimezone,
 	}
 }
 
@@ -67,8 +76,7 @@ func (c *Client) SetBaseURL(baseURL string) {
 }
 
 func (c *Client) FetchDay(ctx context.Context, date string) (*DailyData, error) {
-	targetDate, err := time.Parse("2006-01-02", date)
-	if err != nil {
+	if _, err := time.Parse("2006-01-02", date); err != nil {
 		return nil, fmt.Errorf("parse date: %w", err)
 	}
 
@@ -78,11 +86,12 @@ func (c *Client) FetchDay(ctx context.Context, date string) (*DailyData, error) 
 	}
 
 	q := reqURL.Query()
-	q.Set("Start_YM", targetDate.Format("200601"))
-	q.Set("End_YM", targetDate.Format("200601"))
-	q.Set("TDFKN_CD", stationPrefectureCode(c.stationCode))
-	q.Set("SKT_CD", c.stationCode)
-	q.Set("REQUEST_DATA", "PM2_5,OX,SO2,NO2")
+	q.Set("latitude", strconv.FormatFloat(c.lat, 'f', 4, 64))
+	q.Set("longitude", strconv.FormatFloat(c.lon, 'f', 4, 64))
+	q.Set("start_date", date)
+	q.Set("end_date", date)
+	q.Set("hourly", openMeteoHourlyVars)
+	q.Set("timezone", c.timezone)
 	reqURL.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
@@ -101,75 +110,57 @@ func (c *Client) FetchDay(ctx context.Context, date string) (*DailyData, error) 
 		return nil, fmt.Errorf("air quality api %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	var apiResp apiResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return nil, err
 	}
 
-	var records []apiRecord
-	if err := json.Unmarshal(body, &records); err != nil {
-		return nil, err
-	}
-
-	targetAPI := targetDate.Format("2006/01/02")
-	var pm25Sum, so2Sum, no2Sum float64
-	var pm25Count, so2Count, no2Count int
-	var oxMax float64
-	var oxCount int
-
-	for _, record := range records {
-		if record.Date != targetAPI {
+	var pm25Sum, pm10Sum, ozoneSum, no2Sum float64
+	var count int
+	for i, ts := range apiResp.Hourly.Time {
+		parsed, err := time.Parse("2006-01-02T15:04", ts)
+		if err != nil {
+			return nil, fmt.Errorf("parse hourly timestamp %q: %w", ts, err)
+		}
+		if parsed.Format("2006-01-02") != date {
+			continue
+		}
+		if parsed.Hour() < daytimeStartHour || parsed.Hour() > daytimeEndHour {
+			continue
+		}
+		if !hasIndex(apiResp.Hourly.PM25, i) || !hasIndex(apiResp.Hourly.PM10, i) || !hasIndex(apiResp.Hourly.Ozone, i) || !hasIndex(apiResp.Hourly.NitrogenDioxide, i) {
 			continue
 		}
 
-		if value, ok := parseValue(record.PM25); ok {
-			pm25Sum += value
-			pm25Count++
-		}
-		if value, ok := parseValue(record.Ox); ok {
-			if oxCount == 0 || value > oxMax {
-				oxMax = value
-			}
-			oxCount++
-		}
-		if value, ok := parseValue(record.SO2); ok {
-			so2Sum += value
-			so2Count++
-		}
-		if value, ok := parseValue(record.NO2); ok {
-			no2Sum += value
-			no2Count++
-		}
+		pm25Sum += apiResp.Hourly.PM25[i]
+		pm10Sum += apiResp.Hourly.PM10[i]
+		ozoneSum += apiResp.Hourly.Ozone[i]
+		no2Sum += apiResp.Hourly.NitrogenDioxide[i]
+		count++
 	}
 
-	if pm25Count == 0 && oxCount == 0 {
-		return nil, fmt.Errorf("no air quality data for %s station=%s", date, c.stationCode)
+	if count == 0 {
+		return nil, fmt.Errorf("no daytime air quality data for %s", date)
 	}
 
-	data := &DailyData{
-		Date:        date,
-		StationCode: c.stationCode,
-		PM25Level:   PM25Level(0),
-		OxLevel:     OxLevel(0),
-	}
-	if pm25Count > 0 {
-		data.PM25UgM3 = pm25Sum / float64(pm25Count)
-		data.PM25Level = PM25Level(data.PM25UgM3)
-	}
-	if oxCount > 0 {
-		data.OxPpm = oxMax
-		data.OxLevel = OxLevel(data.OxPpm)
-	}
-	if so2Count > 0 {
-		v := so2Sum / float64(so2Count)
-		data.SO2Ppm = &v
-	}
-	if no2Count > 0 {
-		v := no2Sum / float64(no2Count)
-		data.NO2Ppm = &v
-	}
+	pm25 := pm25Sum / float64(count)
+	ozoneUgM3 := ozoneSum / float64(count)
+	ozonePpm := ozoneUgM3 / ozoneUgM3PerPPM
+	no2UgM3 := no2Sum / float64(count)
 
-	return data, nil
+	return &DailyData{
+		Date:      date,
+		Latitude:  c.lat,
+		Longitude: c.lon,
+		PM25UgM3:  pm25,
+		PM10UgM3:  pm10Sum / float64(count),
+		OzoneUgM3: ozoneUgM3,
+		OxPpm:     ozonePpm,
+		NO2UgM3:   no2UgM3,
+		NO2Ppm:    no2UgM3 / nitrogenUgM3PerPPM,
+		PM25Level: PM25Level(pm25),
+		OxLevel:   OxLevel(ozonePpm),
+	}, nil
 }
 
 func PM25Level(value float64) Level {
@@ -194,21 +185,6 @@ func OxLevel(value float64) Level {
 	}
 }
 
-func parseValue(raw string) (float64, bool) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "-1" {
-		return 0, false
-	}
-	value, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return 0, false
-	}
-	return value, true
-}
-
-func stationPrefectureCode(stationCode string) string {
-	if len(stationCode) >= 2 {
-		return stationCode[:2]
-	}
-	return ""
+func hasIndex[T any](values []T, idx int) bool {
+	return idx >= 0 && idx < len(values)
 }

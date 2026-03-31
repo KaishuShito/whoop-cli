@@ -6,9 +6,9 @@ Read this file when you need to explain `pm25_level`, `ox_level`, or the environ
 
 ## Data Source
 
-Air quality is fetched from Japan's soramame network.
+Air quality is fetched from Open-Meteo Air Quality.
 
-The current skill defaults to station code `13103010`, described in code comments as the closest general station to Hiroo available in the 2026-03-31 station metadata snapshot.
+The CLI uses the same `WEATHER_LAT` and `WEATHER_LON` coordinates as the weather integration, and computes a daytime average across `06:00-22:00`.
 
 ## PM2.5 Interpretation
 
@@ -39,6 +39,7 @@ Context:
 
 - `0.06 ppm` is treated as the point where outdoor sensitivity may start to matter.
 - `0.12 ppm` is treated as a materially poor air-quality signal for symptom-aware scheduling.
+- Open-Meteo provides ozone in `μg/m³`; the CLI converts that value to `ppm` before applying the Ox thresholds.
 
 ## How To Use This In Agent Planning
 

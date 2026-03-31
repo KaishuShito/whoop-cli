@@ -1,190 +1,237 @@
-# Whoop CLI
+# whoop-cli
 
-**Your body's data in your AI agent's context.**
+**Your body's data in your terminal, your journal, and your agent context.**
 
-Whoop CLI pulls recovery, sleep, strain, workouts, weather, air quality, and a daily risk score into a single agent-friendly journal entry or JSON payload.
+`whoop-cli` pulls WHOOP recovery, sleep, strain, workouts, weather, air quality, and a composite risk score into:
 
-## What It Does
+- a beautiful terminal dashboard
+- markdown output for your daily journal
+- JSON for automation and agents
 
-Turn WHOOP API data plus environmental context into a daily summary your CLI, notes, and AI skills can actually use.
+Works with any markdown journal. It fits especially well with Obsidian, Logseq, or plain markdown files.
 
-## Demo
+## Install
 
-```markdown
-## WHOOP Daily - 2026-03-17
+### Homebrew
 
-**Recovery**: 🟢 82% (Green)
-- HRV: 31 ms | RHR: 54 bpm | SpO2: 99.3%
-- Skin Temp: 34.0°C
+Placeholder for future tap support:
 
-**Sleep**: 8h 51m in bed
-- Performance: 71% | Efficiency: 76%
-- REM: 46m | Deep: 1h 47m | Light: 4h 12m
-- Awake: 2h 05m | Disturbances: 19
-
-**Strain**: 0.3 | 2990 kJ
-- Avg HR: 56 | Max HR: 100
-
-**Environment**
-- Weather: 🌧️ 雨 | 18°C (体感15°C) | Humidity 78% | Wind 5.2m/s
-- Pressure: 1006 hPa (▼7 hPa) ⚠️ 気圧急低下
-- Air Quality: PM2.5 18μg/m³ (🟡) | Ox 0.034ppm (🟢)
-- UV Index: 5 (Moderate)
-- 気象病リスク: 🟡 Moderate (42/100)
+```bash
+brew install KaishuShito/tap/whoop-cli
 ```
 
-Japanese labels are used by default for weather and air-quality output, and the formatter layer is easy to customize for your own labels or locale.
+### Go install
+
+```bash
+go install github.com/KaishuShito/whoop-cli/cmd/whoop-cli@latest
+```
+
+### Binary
+
+Download a prebuilt binary from GitHub Releases once releases are published.
+
+## Prerequisites
+
+- Go 1.22+
+- a WHOOP membership
 
 ## Quick Start
-
-1. Create a WHOOP developer app at [developer-dashboard.whoop.com](https://developer-dashboard.whoop.com) with redirect URI `http://localhost:8080/callback` and scopes `read:recovery read:sleep read:cycles read:workout read:profile read:body_measurement offline`.
-2. Clone this repo and copy the example config:
 
 ```bash
 git clone https://github.com/KaishuShito/whoop-cli.git
 cd whoop-cli
-cp .env.example .env
+go build -o ./dist/whoop-cli ./cmd/whoop-cli
+./dist/whoop-cli setup
 ```
 
-3. Fill in `.env` with your WHOOP credentials and journal path.
-4. Build and authenticate:
+After setup:
 
 ```bash
-go build -o ./dist/whoop-cli ./cmd/whoop-cli
-./dist/whoop-cli auth
+./dist/whoop-cli
+./dist/whoop-cli fetch
+./dist/whoop-cli fetch --write --update --prepend
 ./dist/whoop-cli status
 ```
 
-5. Fetch your first report:
+## What `setup` Does
+
+`whoop-cli setup` is the recommended first-run flow.
+
+It will:
+
+1. Open the WHOOP Developer Dashboard
+2. Ask for your WHOOP client ID and client secret
+3. Ask where markdown entries should be written, or allow stdout-only mode
+4. Open a coordinate finder for weather and air quality
+5. Create `.env`, backing up any existing file
+6. Immediately run OAuth authorization and save `tokens.json`
+
+## WHOOP Developer App Setup
+
+You need a WHOOP developer app before authorization works.
+
+Use these settings:
+
+- Redirect URI: `http://localhost:8080/callback`
+- Scopes:
+  `read:recovery read:sleep read:cycles read:workout read:profile read:body_measurement offline`
+
+For the full step-by-step guide, see [docs/whoop-api.md](./docs/whoop-api.md).
+
+## Terminal Dashboard
+
+Running `whoop-cli` with no arguments is the same as `whoop-cli today`.
+
+Features:
+
+- ANSI colors when stdout is a TTY
+- automatic no-color mode when piped
+- `--no-color` for plain output
+- `--json` for script-friendly output
+
+Examples:
 
 ```bash
-./dist/whoop-cli fetch
-./dist/whoop-cli fetch --write --update --prepend
+./dist/whoop-cli
+./dist/whoop-cli today
+./dist/whoop-cli today --json
+./dist/whoop-cli today --no-color
 ```
-
-## Features
-
-- WHOOP API v2 support for recovery, sleep, cycles, and workouts
-- Agent-friendly JSON output via `fetch --json`
-- Journal-ready markdown output in `compact`, `dashboard`, and `detailed` formats
-- Weather enrichment via Open-Meteo
-- Air quality enrichment via Japan's そらまめ君 API
-- Daily weather sensitivity risk score that blends body state and environment
-- Automatic OAuth token refresh on 401
-- Duplicate-safe journal writing with prepend and update modes
-- Included macOS `launchd` template for background automation
-- Zero third-party Go dependencies
-
-## Skills
-
-Whoop CLI is designed to work nicely as a Claude Code Skill.
-
-1. Keep this repo somewhere stable, for example `~/Develop/whoop-cli`
-2. Build the binary: `go build -o ./dist/whoop-cli ./cmd/whoop-cli`
-3. Expose the included skill metadata from [`SKILL.md`](./SKILL.md)
-4. Trigger it in Claude Code with `/whoop`
-
-Useful commands behind the skill:
-
-```bash
-./dist/whoop-cli fetch --json
-./dist/whoop-cli fetch --write --update --prepend
-bash skill/scripts/whoop-summary.sh --date 2026-03-18
-```
-
-## Architecture
-
-```text
-             +----------------------+
-             |      WHOOP API       |
-             | recovery/sleep/etc.  |
-             +----------+-----------+
-                        |
-                        v
- +---------------+   +----------------------+   +------------------+
- | Open-Meteo    |-->|     whoop-cli        |-->| Markdown journal |
- | weather       |   | fetch / status / auth|   | or stdout JSON   |
- +---------------+   | risk scoring         |   +------------------+
-                     +----------+-----------+
-                                ^
-                                |
-                     +----------+-----------+
-                     |  そらまめ君 API       |
-                     |  air quality         |
-                     +----------------------+
-```
-
-## Configuration
-
-All configuration lives in `.env`.
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `WHOOP_CLIENT_ID` | Yes | none | WHOOP developer app client ID |
-| `WHOOP_CLIENT_SECRET` | Yes | none | WHOOP developer app client secret |
-| `WHOOP_REDIRECT_URI` | No | `http://localhost:8080/callback` | OAuth callback used by `auth` |
-| `VAULT_JOURNAL_DIR` | Yes | none | Directory where `YYYY-MM-DD.md` files are written |
-| `WEATHER_ENABLED` | No | `true` | Enable Open-Meteo enrichment |
-| `WEATHER_LAT` | No | `35.6503` | Latitude for weather lookup |
-| `WEATHER_LON` | No | `139.7225` | Longitude for weather lookup |
-| `AIRQUALITY_ENABLED` | No | `true` | Enable air quality enrichment |
-| `AIRQUALITY_STATION_CODE` | No | `13103010` | そらまめ monitoring station code |
-
-Other generated files:
-
-- `.env`: local config, never commit
-- `tokens.json`: OAuth tokens, auto-refreshed, never commit
-- `dist/`: compiled binaries
-
-## API Sources
-
-- WHOOP API v2
-  Used for recovery, sleep, cycles, workouts, and body metrics via OAuth 2.0.
-- Open-Meteo
-  Used for weather code, temperature, humidity, pressure, wind, and UV index.
-- そらまめ君 API
-  Used for PM2.5 and oxidant data from Japan's public air quality monitoring network.
 
 ## Commands
 
 ```bash
-./dist/whoop-cli auth
-./dist/whoop-cli status
-./dist/whoop-cli fetch
-./dist/whoop-cli fetch --format dashboard
-./dist/whoop-cli fetch --date 2026-03-16 --write --update --prepend
-./dist/whoop-cli fetch --days 7 --json
-./dist/whoop-cli weather --json
-./dist/whoop-cli airquality --json
+./dist/whoop-cli                  # terminal dashboard
+./dist/whoop-cli today           # terminal dashboard
+./dist/whoop-cli today --json    # enriched JSON
+./dist/whoop-cli fetch           # markdown preview
+./dist/whoop-cli fetch --write   # write markdown to JOURNAL_DIR
+./dist/whoop-cli weather         # weather only
+./dist/whoop-cli airquality      # air quality only
+./dist/whoop-cli status          # token + config status
+./dist/whoop-cli auth            # OAuth only
+./dist/whoop-cli version         # build version
+```
+
+Detailed CLI behavior lives in [docs/spec.md](./docs/spec.md).
+
+## Configuration
+
+Everything is configured through `.env`.
+
+Required:
+
+- `WHOOP_CLIENT_ID`
+- `WHOOP_CLIENT_SECRET`
+
+Optional:
+
+- `WHOOP_REDIRECT_URI` default: `http://localhost:8080/callback`
+- `JOURNAL_DIR` for `fetch --write`
+- deprecated alias: `VAULT_JOURNAL_DIR`
+- `WEATHER_ENABLED` default: `true`
+- `WEATHER_LAT` default: `35.6503`
+- `WEATHER_LON` default: `139.7225`
+- `AIRQUALITY_ENABLED` default: `true`
+
+Notes:
+
+- air quality reuses the same `WEATHER_LAT` and `WEATHER_LON`
+- if `JOURNAL_DIR` is unset, stdout-only workflows still work
+
+See [.env.example](./.env.example).
+
+## Environmental Data Sources
+
+### Weather
+
+Weather comes from Open-Meteo forecast data.
+
+Used fields:
+
+- weather code
+- temperature
+- humidity
+- pressure
+- wind
+- UV index
+
+### Air Quality
+
+Air quality comes from Open-Meteo Air Quality:
+
+- global coverage
+- no API key required
+- same ecosystem as the weather integration
+
+Used hourly variables:
+
+- `pm2_5`
+- `pm10`
+- `ozone`
+- `nitrogen_dioxide`
+
+The CLI calculates a daytime average across `06:00-22:00`.
+
+To preserve the existing risk-scoring model, ozone is converted from Open-Meteo `μg/m³` into `ppm` before applying the Ox thresholds.
+
+## Risk Scoring
+
+The composite health risk score combines:
+
+- weather stressors
+- air quality
+- WHOOP recovery and sleep state
+
+For the exact thresholds and worked examples, see:
+
+- [docs/risk-scoring.md](./docs/risk-scoring.md)
+- [skill/references/risk-scoring.md](./skill/references/risk-scoring.md)
+
+## Skill Support
+
+This project includes a Claude/Codex-oriented skill file:
+
+- [SKILL.md](./SKILL.md)
+
+Useful helper scripts live in [`skill/scripts`](./skill/scripts).
+
+## Packaging and Release
+
+Project-level release tooling includes:
+
+- `.goreleaser.yml` for multi-platform release builds
+- `Makefile` for local build/test/install/release workflows
+
+Examples:
+
+```bash
+make build
+make test
+make install
+make setup
 ```
 
 ## Automation
 
-The included macOS automation template lives at [`launchd/com.kai.whoop-cli.daily.plist`](./launchd/com.kai.whoop-cli.daily.plist).
+There is a macOS `launchd` template at:
 
-- Label: `com.kai.whoop-cli.daily`
-- Schedule: hourly plus run-at-load
-- Command: `./dist/whoop-cli fetch --write --update --prepend --format compact`
-- Logs: `~/Library/Logs/whoop-cli/`
+- [launchd/com.kai.whoop-cli.daily.plist](./launchd/com.kai.whoop-cli.daily.plist)
 
-Install or remove it with:
+Install helpers:
 
 ```bash
 bash scripts/install-launchd.sh
 bash scripts/uninstall-launchd.sh
 ```
 
-## Contributing
+## Development
 
-Contributions are welcome.
-
-1. Fork the repo
-2. Create a branch
-3. Run `go test ./...`
-4. Open a PR with a clear description of the change
-
-If you change API integrations or formatters, include an example output snippet in the PR.
+```bash
+go test ./...
+make build
+```
 
 ## License
 
-MIT. See [`LICENSE`](./LICENSE).
+MIT. See [LICENSE](./LICENSE).

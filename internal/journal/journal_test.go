@@ -74,12 +74,15 @@ func fullDayData() *whoop.DayData {
 			PressureAlert:        "⚠️ 気圧急低下",
 		},
 		AirQuality: &airquality.DailyData{
-			Date:        "2026-03-16",
-			StationCode: "13103010",
-			PM25UgM3:    18,
-			OxPpm:       0.034,
-			PM25Level:   airquality.PM25Level(18),
-			OxLevel:     airquality.OxLevel(0.034),
+			Date:      "2026-03-16",
+			Latitude:  35.6503,
+			Longitude: 139.7225,
+			PM25UgM3:  18,
+			OzoneUgM3: 67,
+			NO2UgM3:   18,
+			OxPpm:     0.034,
+			PM25Level: airquality.PM25Level(18),
+			OxLevel:   airquality.OxLevel(0.034),
 		},
 	}
 }

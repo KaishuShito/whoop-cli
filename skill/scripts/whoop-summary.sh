@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-WJ="$PROJECT_DIR/dist/whoop-journal"
+WJ="$PROJECT_DIR/dist/whoop-cli"
 
 DATE_FLAG=()
 if [[ "${1:-}" == "--date" ]]; then
@@ -156,7 +156,8 @@ if air:
     ox_level = (air.get('OxLevel') or {})
     print(f'ox_level={ox_level.get(\"Label\", \"\")}')
     print(f'ox_emoji={ox_level.get(\"Emoji\", \"\")}')
-    print(f'air_station_code={air.get(\"StationCode\", \"\")}')
+    print(f'ozone_ug_m3={air.get(\"OzoneUgM3\", 0):.1f}')
+    print(f'no2_ug_m3={air.get(\"NO2UgM3\", 0):.1f}')
 
 risk_score, risk_level, risk_emoji = calc_risk(weather, air, recovery_score, sleep_performance)
 print(f'weather_risk_score={risk_score}')

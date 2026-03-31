@@ -10,8 +10,7 @@ ENV_FILE="$PROJECT_DIR/.env"
 DEFAULT_LOCATION_NAME="Tokyo Hiroo"
 DEFAULT_LAT="35.6503"
 DEFAULT_LON="139.7225"
-DEFAULT_STATION_CODE="13103010"
-DEFAULT_JOURNAL_DIR="$HOME/Documents/Obsidian/01_Projects/Journal"
+DEFAULT_JOURNAL_DIR="$HOME/journal"
 
 mkdir -p "$SKILL_DIR"
 
@@ -76,13 +75,14 @@ existing_journal_dir="$(read_existing_json_value "journal.directory" "$CONFIG_FI
 existing_location_name="$(read_existing_json_value "location.name" "$CONFIG_FILE")"
 existing_lat="$(read_existing_json_value "location.lat" "$CONFIG_FILE")"
 existing_lon="$(read_existing_json_value "location.lon" "$CONFIG_FILE")"
-existing_station_code="$(read_existing_json_value "location.station_code" "$CONFIG_FILE")"
-
 if [[ -z "$existing_client_id" ]]; then
   existing_client_id="$(read_existing_env_value "WHOOP_CLIENT_ID" "$ENV_FILE")"
 fi
 if [[ -z "$existing_client_secret" ]]; then
   existing_client_secret="$(read_existing_env_value "WHOOP_CLIENT_SECRET" "$ENV_FILE")"
+fi
+if [[ -z "$existing_journal_dir" ]]; then
+  existing_journal_dir="$(read_existing_env_value "JOURNAL_DIR" "$ENV_FILE")"
 fi
 if [[ -z "$existing_journal_dir" ]]; then
   existing_journal_dir="$(read_existing_env_value "VAULT_JOURNAL_DIR" "$ENV_FILE")"
@@ -93,19 +93,14 @@ fi
 if [[ -z "$existing_lon" ]]; then
   existing_lon="$(read_existing_env_value "WEATHER_LON" "$ENV_FILE")"
 fi
-if [[ -z "$existing_station_code" ]]; then
-  existing_station_code="$(read_existing_env_value "AIRQUALITY_STATION_CODE" "$ENV_FILE")"
-fi
-
 CLIENT_ID="$(prompt_value "WHOOP Client ID" "${existing_client_id:-}")"
 CLIENT_SECRET="$(prompt_value "WHOOP Client Secret" "${existing_client_secret:-}" true)"
 JOURNAL_DIR="$(prompt_value "Journal directory path" "${existing_journal_dir:-$DEFAULT_JOURNAL_DIR}")"
 LOCATION_NAME="$(prompt_value "Location name" "${existing_location_name:-$DEFAULT_LOCATION_NAME}")"
 LAT="$(prompt_value "Weather latitude" "${existing_lat:-$DEFAULT_LAT}")"
 LON="$(prompt_value "Weather longitude" "${existing_lon:-$DEFAULT_LON}")"
-STATION_CODE="$(prompt_value "Air quality station code" "${existing_station_code:-$DEFAULT_STATION_CODE}")"
 
-python3 - "$CONFIG_FILE" "$CLIENT_ID" "$CLIENT_SECRET" "$JOURNAL_DIR" "$LOCATION_NAME" "$LAT" "$LON" "$STATION_CODE" <<'PY'
+python3 - "$CONFIG_FILE" "$CLIENT_ID" "$CLIENT_SECRET" "$JOURNAL_DIR" "$LOCATION_NAME" "$LAT" "$LON" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -124,7 +119,6 @@ config = {
         "name": sys.argv[5],
         "lat": float(sys.argv[6]),
         "lon": float(sys.argv[7]),
-        "station_code": sys.argv[8],
     },
     "weather": {
         "enabled": True,
@@ -146,12 +140,11 @@ cat > "$ENV_FILE" <<EOF
 WHOOP_CLIENT_ID=$CLIENT_ID
 WHOOP_CLIENT_SECRET=$CLIENT_SECRET
 WHOOP_REDIRECT_URI=http://localhost:8080/callback
-VAULT_JOURNAL_DIR=$JOURNAL_DIR
+JOURNAL_DIR=$JOURNAL_DIR
 WEATHER_ENABLED=true
 WEATHER_LAT=$LAT
 WEATHER_LON=$LON
 AIRQUALITY_ENABLED=true
-AIRQUALITY_STATION_CODE=$STATION_CODE
 EOF
 
 chmod 600 "$ENV_FILE"
@@ -163,6 +156,6 @@ echo "  env file:     $ENV_FILE"
 echo
 echo "Next steps:"
 echo "  cd $PROJECT_DIR"
-echo "  go build -o ./dist/whoop-journal ./cmd/whoop-journal"
-echo "  ./dist/whoop-journal auth"
+echo "  go build -o ./dist/whoop-cli ./cmd/whoop-cli"
+echo "  ./dist/whoop-cli setup"
 echo "  bash skill/scripts/health-check.sh"

@@ -1,0 +1,40 @@
+version: 2
+
+project_name: whoop-cli
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: whoop-cli
+    main: ./cmd/whoop-cli
+    binary: whoop-cli
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+
+release:
+  github:
+    owner: KaishuShito
+    name: whoop-cli

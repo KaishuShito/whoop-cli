@@ -26,8 +26,9 @@ type WeatherConfig struct {
 }
 
 type AirQualityConfig struct {
-	Enabled     bool
-	StationCode string
+	Enabled bool
+	Lat     float64
+	Lon     float64
 }
 
 func Load(projectDir string) (Config, error) {
@@ -46,7 +47,7 @@ func Load(projectDir string) (Config, error) {
 		ClientID:     getEnvDefault("WHOOP_CLIENT_ID", ""),
 		ClientSecret: getEnvDefault("WHOOP_CLIENT_SECRET", ""),
 		RedirectURI:  getEnvDefault("WHOOP_REDIRECT_URI", "http://localhost:8080/callback"),
-		JournalDir:   getEnvDefault("VAULT_JOURNAL_DIR", ""),
+		JournalDir:   getJournalDir(),
 		TokenFile:    filepath.Join(projectDir, "tokens.json"),
 		Weather:      weatherCfg,
 		AirQuality:   airQualityCfg,
@@ -58,9 +59,6 @@ func Load(projectDir string) (Config, error) {
 	}
 	if cfg.ClientSecret == "" {
 		errs = append(errs, "WHOOP_CLIENT_SECRET is required")
-	}
-	if cfg.JournalDir == "" {
-		errs = append(errs, "VAULT_JOURNAL_DIR is required")
 	}
 	if len(errs) > 0 {
 		return cfg, fmt.Errorf("config validation failed: %s", strings.Join(errs, "; "))
@@ -104,10 +102,19 @@ func loadAirQualityConfig(projectDir string) (AirQualityConfig, error) {
 	if err != nil {
 		return AirQualityConfig{}, fmt.Errorf("invalid AIRQUALITY_ENABLED: %w", err)
 	}
+	lat, err := getEnvFloatDefault("WEATHER_LAT", 35.6503)
+	if err != nil {
+		return AirQualityConfig{}, fmt.Errorf("invalid WEATHER_LAT for air quality: %w", err)
+	}
+	lon, err := getEnvFloatDefault("WEATHER_LON", 139.7225)
+	if err != nil {
+		return AirQualityConfig{}, fmt.Errorf("invalid WEATHER_LON for air quality: %w", err)
+	}
 
 	return AirQualityConfig{
-		Enabled:     enabled,
-		StationCode: getEnvDefault("AIRQUALITY_STATION_CODE", "13103010"),
+		Enabled: enabled,
+		Lat:     lat,
+		Lon:     lon,
 	}, nil
 }
 
@@ -141,6 +148,13 @@ func getEnvDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func getJournalDir() string {
+	if v := os.Getenv("JOURNAL_DIR"); v != "" {
+		return v
+	}
+	return getEnvDefault("VAULT_JOURNAL_DIR", "")
 }
 
 func getEnvFloatDefault(key string, def float64) (float64, error) {

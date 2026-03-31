@@ -87,7 +87,7 @@ func RunOAuthFlow(cfg config.Config) (*Tokens, error) {
 	authFullURL := authURL + "?" + authParams.Encode()
 
 	fmt.Println("Opening browser for WHOOP authorization...")
-	openBrowser(authFullURL)
+	OpenBrowser(authFullURL)
 	fmt.Printf("If browser didn't open, visit:\n%s\n\n", authFullURL)
 	fmt.Println("Waiting for callback...")
 
@@ -201,7 +201,7 @@ func randomState() string {
 	return hex.EncodeToString(b)
 }
 
-func openBrowser(url string) {
+func OpenBrowser(url string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":

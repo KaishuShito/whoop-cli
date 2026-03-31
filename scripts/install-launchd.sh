@@ -25,13 +25,18 @@ if [[ ! -f "$PROJECT_DIR/tokens.json" ]]; then
 fi
 
 # Check required keys
-for key in WHOOP_CLIENT_ID WHOOP_CLIENT_SECRET VAULT_JOURNAL_DIR; do
+journal_dir="$(awk -F= '$1=="JOURNAL_DIR" || $1=="VAULT_JOURNAL_DIR" {sub(/^[ \t]+/, "", $2); print $2}' "$PROJECT_DIR/.env" | head -n1)"
+for key in WHOOP_CLIENT_ID WHOOP_CLIENT_SECRET; do
   value="$(awk -F= -v k="$key" '$1==k {sub(/^[ \t]+/, "", $2); print $2}' "$PROJECT_DIR/.env" | head -n1)"
   if [[ -z "${value:-}" ]]; then
     echo "[error] .env missing $key"
     exit 1
   fi
 done
+if [[ -z "${journal_dir:-}" ]]; then
+  echo "[error] .env missing JOURNAL_DIR (or deprecated VAULT_JOURNAL_DIR). launchd install needs a write target."
+  exit 1
+fi
 
 # Build
 echo "Building whoop-cli..."
