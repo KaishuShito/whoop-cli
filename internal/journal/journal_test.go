@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kai/whoop-journal/internal/airquality"
+	"github.com/kai/whoop-journal/internal/weather"
 	"github.com/kai/whoop-journal/internal/whoop"
 )
 
@@ -56,6 +58,29 @@ func fullDayData() *whoop.DayData {
 				},
 			},
 		}},
+		Weather: &weather.DailyData{
+			Date:                 "2026-03-16",
+			WeatherCode:          61,
+			WeatherLabel:         "雨",
+			WeatherEmoji:         "🌧️",
+			TemperatureMaxC:      18,
+			TemperatureMinC:      8,
+			HumidityPercent:      45,
+			PressureHPa:          1013,
+			PressureChangeHPa:    -7,
+			UVIndexMax:           5,
+			ApparentTemperatureC: 15,
+			WindSpeedMS:          5.2,
+			PressureAlert:        "⚠️ 気圧急低下",
+		},
+		AirQuality: &airquality.DailyData{
+			Date:        "2026-03-16",
+			StationCode: "13103010",
+			PM25UgM3:    18,
+			OxPpm:       0.034,
+			PM25Level:   airquality.PM25Level(18),
+			OxLevel:     airquality.OxLevel(0.034),
+		},
 	}
 }
 
@@ -140,6 +165,11 @@ func TestFormatCompact_FullData(t *testing.T) {
 	mustContain(t, out, "7h 39m in bed")
 	mustContain(t, out, "**Strain**: 9.4")
 	mustContain(t, out, "Running: strain 6.5")
+	mustContain(t, out, "**Environment**")
+	mustContain(t, out, "Weather: 🌧️ 雨 | 18°C (体感15°C) | Humidity 45% | Wind 5.2m/s")
+	mustContain(t, out, "Pressure: 1013 hPa (▼7 hPa) ⚠️ 気圧急低下")
+	mustContain(t, out, "Air Quality: PM2.5 18μg/m³ (🟡) | Ox 0.034ppm (🟢)")
+	mustContain(t, out, "気象病リスク: 🟡 Moderate (45/100)")
 }
 
 func TestFormatCompact_Empty(t *testing.T) {
@@ -322,9 +352,9 @@ func TestWriteToJournal_Update(t *testing.T) {
 
 func TestRemoveWhoopSection(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		want   string
+		name  string
+		input string
+		want  string
 	}{
 		{
 			"middle section",

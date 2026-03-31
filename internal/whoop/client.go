@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/kai/whoop-journal/internal/airquality"
+	"github.com/kai/whoop-journal/internal/weather"
 )
 
 const apiBase = "https://api.prod.whoop.com/developer/v2"
@@ -36,12 +39,12 @@ type PaginatedResponse[T any] struct {
 }
 
 type Cycle struct {
-	ID             int64  `json:"id"`
-	UserID         int64  `json:"user_id"`
-	Start          string `json:"start"`
-	End            string `json:"end"`
-	TimezoneOffset string `json:"timezone_offset"`
-	ScoreState     string `json:"score_state"`
+	ID             int64       `json:"id"`
+	UserID         int64       `json:"user_id"`
+	Start          string      `json:"start"`
+	End            string      `json:"end"`
+	TimezoneOffset string      `json:"timezone_offset"`
+	ScoreState     string      `json:"score_state"`
 	Score          *CycleScore `json:"score"`
 }
 
@@ -53,9 +56,9 @@ type CycleScore struct {
 }
 
 type Recovery struct {
-	CycleID    int64  `json:"cycle_id"`
-	SleepID    string `json:"sleep_id"`
-	ScoreState string `json:"score_state"`
+	CycleID    int64          `json:"cycle_id"`
+	SleepID    string         `json:"sleep_id"`
+	ScoreState string         `json:"score_state"`
 	Score      *RecoveryScore `json:"score"`
 }
 
@@ -69,13 +72,13 @@ type RecoveryScore struct {
 }
 
 type Sleep struct {
-	ID             string `json:"id"`
-	CycleID        int64  `json:"cycle_id"`
-	Start          string `json:"start"`
-	End            string `json:"end"`
-	TimezoneOffset string `json:"timezone_offset"`
-	Nap            bool   `json:"nap"`
-	ScoreState     string `json:"score_state"`
+	ID             string      `json:"id"`
+	CycleID        int64       `json:"cycle_id"`
+	Start          string      `json:"start"`
+	End            string      `json:"end"`
+	TimezoneOffset string      `json:"timezone_offset"`
+	Nap            bool        `json:"nap"`
+	ScoreState     string      `json:"score_state"`
 	Score          *SleepScore `json:"score"`
 }
 
@@ -89,30 +92,30 @@ type SleepScore struct {
 }
 
 type StageSummary struct {
-	TotalInBedTimeMilli        int64 `json:"total_in_bed_time_milli"`
-	TotalAwakeTimeMilli        int64 `json:"total_awake_time_milli"`
-	TotalLightSleepTimeMilli   int64 `json:"total_light_sleep_time_milli"`
+	TotalInBedTimeMilli         int64 `json:"total_in_bed_time_milli"`
+	TotalAwakeTimeMilli         int64 `json:"total_awake_time_milli"`
+	TotalLightSleepTimeMilli    int64 `json:"total_light_sleep_time_milli"`
 	TotalSlowWaveSleepTimeMilli int64 `json:"total_slow_wave_sleep_time_milli"`
-	TotalRemSleepTimeMilli     int64 `json:"total_rem_sleep_time_milli"`
-	SleepCycleCount            int   `json:"sleep_cycle_count"`
-	DisturbanceCount           int   `json:"disturbance_count"`
+	TotalRemSleepTimeMilli      int64 `json:"total_rem_sleep_time_milli"`
+	SleepCycleCount             int   `json:"sleep_cycle_count"`
+	DisturbanceCount            int   `json:"disturbance_count"`
 }
 
 type SleepNeeded struct {
-	BaselineMilli           int64 `json:"baseline_milli"`
-	NeedFromSleepDebtMilli  int64 `json:"need_from_sleep_debt_milli"`
+	BaselineMilli             int64 `json:"baseline_milli"`
+	NeedFromSleepDebtMilli    int64 `json:"need_from_sleep_debt_milli"`
 	NeedFromRecentStrainMilli int64 `json:"need_from_recent_strain_milli"`
-	NeedFromRecentNapMilli  int64 `json:"need_from_recent_nap_milli"`
+	NeedFromRecentNapMilli    int64 `json:"need_from_recent_nap_milli"`
 }
 
 type Workout struct {
-	ID             string `json:"id"`
-	Start          string `json:"start"`
-	End            string `json:"end"`
-	TimezoneOffset string `json:"timezone_offset"`
-	SportName      string `json:"sport_name"`
-	SportID        int    `json:"sport_id"`
-	ScoreState     string `json:"score_state"`
+	ID             string        `json:"id"`
+	Start          string        `json:"start"`
+	End            string        `json:"end"`
+	TimezoneOffset string        `json:"timezone_offset"`
+	SportName      string        `json:"sport_name"`
+	SportID        int           `json:"sport_id"`
+	ScoreState     string        `json:"score_state"`
 	Score          *WorkoutScore `json:"score"`
 }
 
@@ -137,11 +140,13 @@ type ZoneDurations struct {
 // --- Aggregated daily data ---
 
 type DayData struct {
-	Date      string     `json:"date"`
-	Cycles    []Cycle    `json:"cycles"`
-	Recovery  []Recovery `json:"recovery"`
-	Sleep     []Sleep    `json:"sleep"`
-	Workouts  []Workout  `json:"workouts"`
+	Date       string                `json:"date"`
+	Cycles     []Cycle               `json:"cycles"`
+	Recovery   []Recovery            `json:"recovery"`
+	Sleep      []Sleep               `json:"sleep"`
+	Workouts   []Workout             `json:"workouts"`
+	Weather    *weather.DailyData    `json:"weather,omitempty"`
+	AirQuality *airquality.DailyData `json:"air_quality,omitempty"`
 }
 
 func (d *DayData) HasData() bool {

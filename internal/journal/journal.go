@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kai/whoop-journal/internal/weather"
 	"github.com/kai/whoop-journal/internal/whoop"
 )
 
@@ -59,6 +60,33 @@ func FormatCompact(d *whoop.DayData) string {
 				b.WriteString(fmt.Sprintf("- %s: strain %.1f, Avg HR %d\n", name, w.Score.Strain, w.Score.AverageHeartRate))
 			}
 		}
+	}
+
+	if d.Weather != nil || d.AirQuality != nil {
+		recoveryScore, sleepPerformance := extractRecoveryAndSleepScores(d)
+		risk := weather.CalculateRiskWithAirQuality(d.Weather, d.AirQuality, recoveryScore, sleepPerformance)
+
+		b.WriteString("\n**Environment**\n")
+		if d.Weather != nil {
+			b.WriteString(fmt.Sprintf("- Weather: %s %s | %.0f°C (体感%.0f°C) | Humidity %.0f%% | Wind %.1fm/s\n",
+				d.Weather.WeatherEmoji, d.Weather.WeatherLabel, d.Weather.TemperatureMaxC,
+				d.Weather.ApparentTemperatureC, d.Weather.HumidityPercent, d.Weather.WindSpeedMS))
+			b.WriteString(fmt.Sprintf("- Pressure: %.0f hPa (%s)",
+				d.Weather.PressureHPa, formatPressureChange(d.Weather.PressureChangeHPa)))
+			if d.Weather.PressureAlert != "" {
+				b.WriteString(" " + d.Weather.PressureAlert)
+			}
+			b.WriteString("\n")
+		}
+		if d.AirQuality != nil {
+			b.WriteString(fmt.Sprintf("- Air Quality: PM2.5 %.0fμg/m³ (%s) | Ox %.3fppm (%s)\n",
+				d.AirQuality.PM25UgM3, d.AirQuality.PM25Level.Emoji,
+				d.AirQuality.OxPpm, d.AirQuality.OxLevel.Emoji))
+		}
+		if d.Weather != nil {
+			b.WriteString(fmt.Sprintf("- UV Index: %.0f (%s)\n", d.Weather.UVIndexMax, weather.UVIndexLabel(d.Weather.UVIndexMax)))
+		}
+		b.WriteString(fmt.Sprintf("- 気象病リスク: %s %s (%d/100)\n", risk.Emoji, risk.Level, risk.Score))
 	}
 
 	return b.String()
@@ -367,4 +395,25 @@ func recoveryLabel(score float64) string {
 		return "Yellow"
 	}
 	return "Red"
+}
+
+func extractRecoveryAndSleepScores(d *whoop.DayData) (recoveryScore, sleepPerformance float64) {
+	if len(d.Recovery) > 0 && d.Recovery[0].Score != nil {
+		recoveryScore = d.Recovery[0].Score.RecoveryScore
+	}
+	if len(d.Sleep) > 0 && d.Sleep[0].Score != nil {
+		sleepPerformance = d.Sleep[0].Score.SleepPerformancePercentage
+	}
+	return recoveryScore, sleepPerformance
+}
+
+func formatPressureChange(change float64) string {
+	switch {
+	case change < 0:
+		return fmt.Sprintf("▼%.0f hPa", -change)
+	case change > 0:
+		return fmt.Sprintf("▲%.0f hPa", change)
+	default:
+		return "±0 hPa"
+	}
 }

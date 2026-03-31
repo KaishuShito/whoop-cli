@@ -11,6 +11,7 @@ whoop-journal/
 │   ├── auth/                      # OAuth 2.0 + token auto-refresh
 │   ├── config/                    # .env loader + validation
 │   ├── journal/                   # 3 output formats + journal file I/O
+│   ├── weather/                   # Open-Meteo client + risk scoring
 │   └── whoop/                     # WHOOP API v2 client
 ├── launchd/                       # macOS daemon (daily at 09:00 JST)
 ├── scripts/
@@ -36,6 +37,11 @@ cp .env.example .env
 #   WHOOP_CLIENT_ID=...
 #   WHOOP_CLIENT_SECRET=...
 #   VAULT_JOURNAL_DIR=/path/to/Obsidian/01_Projects/Journal
+#   WEATHER_LAT=35.6503
+#   WEATHER_LON=139.7225
+#   WEATHER_ENABLED=true
+#   AIRQUALITY_ENABLED=true
+#   AIRQUALITY_STATION_CODE=13103010
 ```
 
 ### 3. Build & Auth
@@ -75,6 +81,14 @@ whoop-journal fetch --days 7 --write --prepend
 # Raw JSON (for AI agents / piping)
 whoop-journal fetch --json
 
+# Weather only (for debugging)
+whoop-journal weather
+whoop-journal weather --date 2026-03-16 --json
+
+# Air quality only (for debugging)
+whoop-journal airquality
+whoop-journal airquality --date 2026-03-16 --json
+
 # Token & config status
 whoop-journal status
 ```
@@ -97,6 +111,13 @@ whoop-journal status
 
 **Strain**: 0.3 | 2990 kJ
 - Avg HR: 56 | Max HR: 100
+
+**Environment**
+- Weather: 🌧️ 雨 | 18°C (体感15°C) | Humidity 78% | Wind 5.2m/s
+- Pressure: 1006 hPa (▼7 hPa) ⚠️ 気圧急低下
+- Air Quality: PM2.5 18μg/m³ (🟡) | Ox 0.034ppm (🟢)
+- UV Index: 5 (Moderate)
+- 気象病リスク: 🟡 Moderate (42/100)
 ```
 
 ### dashboard
@@ -116,11 +137,16 @@ WHOOP API v2 (api.prod.whoop.com)
     ├── /recovery      → Recovery score, HRV, RHR, SpO2, skin temp
     ├── /activity/sleep → Sleep stages, performance, efficiency
     └── /activity/workout → Sport, strain, HR zones
+Open-Meteo (api.open-meteo.com)
+    │
+    ├── daily             → weather_code, temp max/min, UV max
+    └── hourly            → surface pressure, relative humidity
     │
     ▼
 Go CLI (whoop-journal fetch)
     │  - JST date → UTC range conversion
     │  - Auto token refresh on 401
+    │  - Weather fetch degrades gracefully on API failure
     │  - Duplicate write protection
     ▼
 Obsidian Journal (01_Projects/Journal/YYYY-MM-DD.md)

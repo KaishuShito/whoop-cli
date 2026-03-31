@@ -38,6 +38,18 @@ VAULT_JOURNAL_DIR=/tmp/journal
 	if cfg.TokenFile != filepath.Join(dir, "tokens.json") {
 		t.Errorf("TokenFile = %q", cfg.TokenFile)
 	}
+	if !cfg.Weather.Enabled {
+		t.Error("Weather.Enabled should default to true")
+	}
+	if cfg.Weather.Lat != 35.6503 || cfg.Weather.Lon != 139.7225 {
+		t.Errorf("unexpected default weather coordinates: %+v", cfg.Weather)
+	}
+	if !cfg.AirQuality.Enabled {
+		t.Error("AirQuality.Enabled should default to true")
+	}
+	if cfg.AirQuality.StationCode != "13103010" {
+		t.Errorf("unexpected default air quality station: %+v", cfg.AirQuality)
+	}
 }
 
 func TestLoad_MissingRequired(t *testing.T) {
@@ -115,5 +127,51 @@ VAULT_JOURNAL_DIR=/tmp/journal
 	}
 	if cfg.ClientID != "test-id" {
 		t.Errorf("failed to parse .env with comments, got %q", cfg.ClientID)
+	}
+}
+
+func TestLoadWeather(t *testing.T) {
+	dir := t.TempDir()
+	envContent := `WEATHER_ENABLED=false
+WEATHER_LAT=35.1
+WEATHER_LON=139.1
+`
+	os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0644)
+
+	os.Unsetenv("WEATHER_ENABLED")
+	os.Unsetenv("WEATHER_LAT")
+	os.Unsetenv("WEATHER_LON")
+
+	cfg, err := LoadWeather(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Enabled {
+		t.Error("expected weather to be disabled")
+	}
+	if cfg.Lat != 35.1 || cfg.Lon != 139.1 {
+		t.Errorf("unexpected weather config: %+v", cfg)
+	}
+}
+
+func TestLoadAirQuality(t *testing.T) {
+	dir := t.TempDir()
+	envContent := `AIRQUALITY_ENABLED=false
+AIRQUALITY_STATION_CODE=13113010
+`
+	os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0644)
+
+	os.Unsetenv("AIRQUALITY_ENABLED")
+	os.Unsetenv("AIRQUALITY_STATION_CODE")
+
+	cfg, err := LoadAirQuality(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Enabled {
+		t.Error("expected air quality to be disabled")
+	}
+	if cfg.StationCode != "13113010" {
+		t.Errorf("unexpected air quality config: %+v", cfg)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -14,10 +15,32 @@ type Config struct {
 	RedirectURI  string
 	JournalDir   string
 	TokenFile    string
+	Weather      WeatherConfig
+	AirQuality   AirQualityConfig
+}
+
+type WeatherConfig struct {
+	Enabled bool
+	Lat     float64
+	Lon     float64
+}
+
+type AirQualityConfig struct {
+	Enabled     bool
+	StationCode string
 }
 
 func Load(projectDir string) (Config, error) {
 	loadEnvFile(filepath.Join(projectDir, ".env"))
+
+	weatherCfg, err := loadWeatherConfig(projectDir)
+	if err != nil {
+		return Config{}, err
+	}
+	airQualityCfg, err := loadAirQualityConfig(projectDir)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		ClientID:     getEnvDefault("WHOOP_CLIENT_ID", ""),
@@ -25,6 +48,8 @@ func Load(projectDir string) (Config, error) {
 		RedirectURI:  getEnvDefault("WHOOP_REDIRECT_URI", "http://localhost:8080/callback"),
 		JournalDir:   getEnvDefault("VAULT_JOURNAL_DIR", ""),
 		TokenFile:    filepath.Join(projectDir, "tokens.json"),
+		Weather:      weatherCfg,
+		AirQuality:   airQualityCfg,
 	}
 
 	var errs []string
@@ -41,6 +66,49 @@ func Load(projectDir string) (Config, error) {
 		return cfg, fmt.Errorf("config validation failed: %s", strings.Join(errs, "; "))
 	}
 	return cfg, nil
+}
+
+func LoadWeather(projectDir string) (WeatherConfig, error) {
+	loadEnvFile(filepath.Join(projectDir, ".env"))
+	return loadWeatherConfig(projectDir)
+}
+
+func LoadAirQuality(projectDir string) (AirQualityConfig, error) {
+	loadEnvFile(filepath.Join(projectDir, ".env"))
+	return loadAirQualityConfig(projectDir)
+}
+
+func loadWeatherConfig(projectDir string) (WeatherConfig, error) {
+	lat, err := getEnvFloatDefault("WEATHER_LAT", 35.6503)
+	if err != nil {
+		return WeatherConfig{}, fmt.Errorf("invalid WEATHER_LAT: %w", err)
+	}
+	lon, err := getEnvFloatDefault("WEATHER_LON", 139.7225)
+	if err != nil {
+		return WeatherConfig{}, fmt.Errorf("invalid WEATHER_LON: %w", err)
+	}
+	enabled, err := getEnvBoolDefault("WEATHER_ENABLED", true)
+	if err != nil {
+		return WeatherConfig{}, fmt.Errorf("invalid WEATHER_ENABLED: %w", err)
+	}
+
+	return WeatherConfig{
+		Enabled: enabled,
+		Lat:     lat,
+		Lon:     lon,
+	}, nil
+}
+
+func loadAirQualityConfig(projectDir string) (AirQualityConfig, error) {
+	enabled, err := getEnvBoolDefault("AIRQUALITY_ENABLED", true)
+	if err != nil {
+		return AirQualityConfig{}, fmt.Errorf("invalid AIRQUALITY_ENABLED: %w", err)
+	}
+
+	return AirQualityConfig{
+		Enabled:     enabled,
+		StationCode: getEnvDefault("AIRQUALITY_STATION_CODE", "13103010"),
+	}, nil
 }
 
 func loadEnvFile(path string) {
@@ -73,4 +141,28 @@ func getEnvDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func getEnvFloatDefault(key string, def float64) (float64, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return def, nil
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0, err
+	}
+	return f, nil
+}
+
+func getEnvBoolDefault(key string, def bool) (bool, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return def, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, err
+	}
+	return b, nil
 }

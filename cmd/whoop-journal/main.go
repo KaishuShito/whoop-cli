@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kai/whoop-journal/internal/airquality"
 	"github.com/kai/whoop-journal/internal/auth"
 	"github.com/kai/whoop-journal/internal/config"
 	"github.com/kai/whoop-journal/internal/journal"
+	"github.com/kai/whoop-journal/internal/weather"
 	"github.com/kai/whoop-journal/internal/whoop"
 )
 
@@ -49,6 +51,10 @@ func run() int {
 		return runAuth(projectDir)
 	case "fetch":
 		return runFetch(projectDir, os.Args[2:])
+	case "weather":
+		return runWeather(projectDir, os.Args[2:])
+	case "airquality":
+		return runAirQuality(projectDir, os.Args[2:])
 	case "status":
 		return runStatus(projectDir)
 	case "help", "--help", "-h":
@@ -67,6 +73,8 @@ func printUsage() {
 Commands:
   auth                    Run OAuth2 flow to get access tokens
   fetch [flags]           Fetch WHOOP data and write to journal
+  weather [flags]         Fetch weather/environment data only
+  airquality [flags]      Fetch air quality data only
   status                  Show token status and config
 
 Fetch flags:
@@ -76,7 +84,15 @@ Fetch flags:
   --write                 Write to journal file (default: preview only)
   --update                Replace existing WHOOP section with fresh data
   --prepend               Insert at top of journal (after header) instead of append
-  --json                  Output raw API data as JSON`)
+  --json                  Output raw API data as JSON
+
+Weather flags:
+  --date YYYY-MM-DD       Date to fetch (default: today)
+  --json                  Output weather data as JSON
+
+Airquality flags:
+  --date YYYY-MM-DD       Date to fetch (default: today)
+  --json                  Output air quality data as JSON`)
 }
 
 // --- auth ---
@@ -160,6 +176,8 @@ func runFetch(projectDir string, args []string) int {
 	}
 
 	exitCode := 0
+	weatherClient := weather.NewClient(cfg.Weather.Lat, cfg.Weather.Lon)
+	airQualityClient := airquality.NewClient(cfg.AirQuality.StationCode)
 	for _, date := range dates {
 		data, err := client.FetchDay(ctx, date)
 		if err != nil {
@@ -177,6 +195,23 @@ func runFetch(projectDir string, args []string) int {
 				fmt.Fprintf(os.Stderr, "fetch %s failed after refresh: %v\n", date, err)
 				exitCode = 1
 				continue
+			}
+		}
+
+		if cfg.Weather.Enabled {
+			weatherData, weatherErr := weatherClient.FetchDay(ctx, date)
+			if weatherErr != nil {
+				fmt.Fprintf(os.Stderr, "date=%s weather_status=degraded error=%v\n", date, weatherErr)
+			} else {
+				data.Weather = weatherData
+			}
+		}
+		if cfg.AirQuality.Enabled {
+			airQualityData, airQualityErr := airQualityClient.FetchDay(ctx, date)
+			if airQualityErr != nil {
+				fmt.Fprintf(os.Stderr, "date=%s airquality_status=degraded error=%v\n", date, airQualityErr)
+			} else {
+				data.AirQuality = airQualityData
 			}
 		}
 
@@ -207,6 +242,127 @@ func runFetch(projectDir string, args []string) int {
 	}
 
 	return exitCode
+}
+
+func runWeather(projectDir string, args []string) int {
+	fs := flag.NewFlagSet("weather", flag.ExitOnError)
+	dateFlag := fs.String("date", "", "Date to fetch (YYYY-MM-DD)")
+	jsonFlag := fs.Bool("json", false, "Output raw JSON")
+	fs.Parse(args)
+
+	weatherCfg, err := config.LoadWeather(projectDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+		return 1
+	}
+	if !weatherCfg.Enabled {
+		fmt.Fprintln(os.Stderr, "weather is disabled (WEATHER_ENABLED=false)")
+		return 1
+	}
+
+	jst := time.FixedZone("JST", 9*3600)
+	targetDate := time.Now().In(jst)
+	if *dateFlag != "" {
+		targetDate, err = time.ParseInLocation("2006-01-02", *dateFlag, jst)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "invalid date: %v\n", err)
+			return 1
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client := weather.NewClient(weatherCfg.Lat, weatherCfg.Lon)
+	data, err := client.FetchDay(ctx, targetDate.Format("2006-01-02"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "weather fetch failed: %v\n", err)
+		return 1
+	}
+
+	if *jsonFlag {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(data)
+		return 0
+	}
+
+	fmt.Printf("Weather: %s %s | %.0f°C (%.0f〜%.0f°C) | Humidity %.0f%%\n",
+		data.WeatherEmoji, data.WeatherLabel, data.TemperatureMaxC, data.TemperatureMinC, data.TemperatureMaxC, data.HumidityPercent)
+	fmt.Printf("Apparent: %.1f°C | Wind: %.1fm/s\n", data.ApparentTemperatureC, data.WindSpeedMS)
+	fmt.Printf("Pressure: %.0f hPa (%s)", data.PressureHPa, formatPressureChange(data.PressureChangeHPa))
+	if data.PressureAlert != "" {
+		fmt.Printf(" %s", data.PressureAlert)
+	}
+	fmt.Println()
+	fmt.Printf("UV Index: %.0f (%s)\n", data.UVIndexMax, weather.UVIndexLabel(data.UVIndexMax))
+	return 0
+}
+
+func runAirQuality(projectDir string, args []string) int {
+	fs := flag.NewFlagSet("airquality", flag.ExitOnError)
+	dateFlag := fs.String("date", "", "Date to fetch (YYYY-MM-DD)")
+	jsonFlag := fs.Bool("json", false, "Output raw JSON")
+	fs.Parse(args)
+
+	aqCfg, err := config.LoadAirQuality(projectDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+		return 1
+	}
+	if !aqCfg.Enabled {
+		fmt.Fprintln(os.Stderr, "air quality is disabled (AIRQUALITY_ENABLED=false)")
+		return 1
+	}
+
+	jst := time.FixedZone("JST", 9*3600)
+	targetDate := time.Now().In(jst)
+	if *dateFlag != "" {
+		targetDate, err = time.ParseInLocation("2006-01-02", *dateFlag, jst)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "invalid date: %v\n", err)
+			return 1
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client := airquality.NewClient(aqCfg.StationCode)
+	data, err := client.FetchDay(ctx, targetDate.Format("2006-01-02"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "air quality fetch failed: %v\n", err)
+		return 1
+	}
+
+	if *jsonFlag {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(data)
+		return 0
+	}
+
+	fmt.Printf("Station: %s\n", data.StationCode)
+	fmt.Printf("PM2.5: %.0fμg/m³ (%s %s)\n", data.PM25UgM3, data.PM25Level.Emoji, data.PM25Level.Label)
+	fmt.Printf("Ox: %.3fppm (%s %s)\n", data.OxPpm, data.OxLevel.Emoji, data.OxLevel.Label)
+	if data.SO2Ppm != nil {
+		fmt.Printf("SO2: %.3fppm\n", *data.SO2Ppm)
+	}
+	if data.NO2Ppm != nil {
+		fmt.Printf("NO2: %.3fppm\n", *data.NO2Ppm)
+	}
+	return 0
+}
+
+func formatPressureChange(change float64) string {
+	switch {
+	case change < 0:
+		return fmt.Sprintf("▼%.0f hPa", -change)
+	case change > 0:
+		return fmt.Sprintf("▲%.0f hPa", change)
+	default:
+		return "±0 hPa"
+	}
 }
 
 // --- status ---
