@@ -10,6 +10,22 @@
 
 Works with any markdown journal. It fits especially well with Obsidian, Logseq, or plain markdown files.
 
+## Claude Code / OpenClaw Skill
+
+whoop-cli ships as a **Claude Code Skill** out of the box. Install the skill and your AI agent can check your health context before planning your day:
+
+```
+> /whoop How's my recovery?
+
+🟢 Recovery 79%. HRV 27ms. Sleep 8h09m (84% perf).
+Weather risk 🔴 High (60/100) — pressure dropped 10 hPa.
+→ Body is fine but environment is rough. Go easy on deep work.
+```
+
+The skill file is at [`SKILL.md`](./SKILL.md). Helper scripts in [`skill/scripts/`](./skill/scripts/) give agents quick key=value access without reading full JSON.
+
+See [docs/spec.md](./docs/spec.md) for the full CLI reference.
+
 ## Install
 
 ### Homebrew
@@ -188,13 +204,21 @@ For the exact thresholds and worked examples, see:
 - [docs/risk-scoring.md](./docs/risk-scoring.md)
 - [skill/references/risk-scoring.md](./skill/references/risk-scoring.md)
 
-## Skill Support
+## Skill Reference
 
-This project includes a Claude/Codex-oriented skill file:
+Full skill documentation: [`SKILL.md`](./SKILL.md)
 
-- [SKILL.md](./SKILL.md)
+Helper scripts in [`skill/scripts/`](./skill/scripts/):
 
-Useful helper scripts live in [`skill/scripts`](./skill/scripts).
+- `whoop-summary.sh` — key=value health summary (fast, low-context)
+- `setup.sh` — interactive first-run wizard
+- `health-check.sh` — verify token + API connectivity
+
+Reference docs in [`skill/references/`](./skill/references/):
+
+- `risk-scoring.md` — composite score algorithm
+- `weather-codes.md` — WMO weather code table
+- `air-quality-standards.md` — PM2.5/Ozone thresholds
 
 ## Packaging and Release
 
@@ -212,18 +236,16 @@ make install
 make setup
 ```
 
-## Automation
+## Automation (macOS)
 
-There is a macOS `launchd` template at:
-
-- [launchd/com.kai.whoop-cli.daily.plist](./launchd/com.kai.whoop-cli.daily.plist)
-
-Install helpers:
+Run whoop-cli automatically every morning with `launchd`:
 
 ```bash
-bash scripts/install-launchd.sh
-bash scripts/uninstall-launchd.sh
+bash scripts/install-launchd.sh   # builds binary + installs daily plist
+bash scripts/uninstall-launchd.sh # removes the plist
 ```
+
+The template plist is in [`launchd/`](./launchd/). Edit the paths inside to match your setup before installing.
 
 ## Development
 
